@@ -1,0 +1,71 @@
+import taichi as ti
+import numpy as np
+from shared.parameters import res, dt, s_dens, s_radius
+from shared.utils import density_source
+from difusion import diffuse
+
+arch = ti.vulkan if ti._lib.core.with_vulkan() else ti.cuda
+ti.init(arch=arch)
+
+density_1 = ti.field(dtype=ti.f32, shape=(res, res))
+density_2 = ti.field(dtype=ti.f32, shape=(res, res))
+
+
+class FieldPair:
+    def __init__(self, cur, nxt):
+        self.cur = cur
+        self.nxt = nxt
+
+    def swap(self):
+        self.cur, self.nxt = self.nxt, self.cur
+
+
+dens = FieldPair(density_1, density_2)
+
+
+def init():
+    dens.cur.fill(0)
+    dens.nxt.fill(0)
+
+
+def step(input_data):
+    density_source(dens.cur, input_data)
+    diffuse(dens)
+    dens.swap()
+
+
+def main():
+    paused = False
+    window = ti.ui.Window("Etapa 1: Difusión", (res, res))
+    canvas = window.get_canvas()
+
+    init()
+
+    while window.running:
+        input_data = np.zeros(3, dtype=np.float32)
+
+        if window.get_event(ti.ui.PRESS):
+            e = window.event
+            if e.key == ti.ui.ESCAPE:
+                break
+            elif e.key == "r":
+                paused = False
+                init()
+            elif e.key == "p":
+                paused = not paused
+
+        if window.is_pressed(ti.ui.RMB):
+            mouse = window.get_cursor_pos()
+            input_data[0] = mouse[0] * res
+            input_data[1] = mouse[1] * res
+            input_data[2] = 1.0
+
+        if not paused:
+            step(input_data)
+
+        canvas.set_image(dens.cur)
+        window.show()
+
+
+if __name__ == "__main__":
+    main()
