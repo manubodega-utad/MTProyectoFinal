@@ -2,13 +2,14 @@ import taichi as ti
 import numpy as np
 from shared.parameters import res, dt, s_dens, s_radius
 from shared.utils import density_source
-from difusion import diffuse
+from difusion import diffuse, set_boundaries
 
 arch = ti.vulkan if ti._lib.core.with_vulkan() else ti.cuda
 ti.init(arch=arch)
 
-density_1 = ti.field(dtype=ti.f32, shape=(res, res))
-density_2 = ti.field(dtype=ti.f32, shape=(res, res))
+density_0 = ti.field(dtype=ti.f32, shape=(res, res))  # Densidad de la fuente
+density_1 = ti.field(dtype=ti.f32, shape=(res, res))  # Densidad iteración anterior
+density_2 = ti.field(dtype=ti.f32, shape=(res, res))  # Densidad nueva
 
 
 class FieldPair:
@@ -24,14 +25,15 @@ dens = FieldPair(density_1, density_2)
 
 
 def init():
+    density_0.fill(0)
     dens.cur.fill(0)
     dens.nxt.fill(0)
 
 
 def step(input_data):
     density_source(dens.cur, input_data)
-    diffuse(dens)
-    dens.swap()
+    set_boundaries(dens.cur)
+    diffuse(dens, density_0)
 
 
 def main():
