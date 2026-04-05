@@ -1,5 +1,5 @@
 import taichi as ti
-from shared.parameters import s_dens, s_radius, dt, res
+from shared.parameters import s_dens, s_radius, dt, density_color
 
 
 @ti.kernel
@@ -11,6 +11,19 @@ def density_source(dens: ti.template(), input_data: ti.types.ndarray()):
         cy = j + 0.5
         d2 = (cx - mx) ** 2 + (cy - my) ** 2
         dens[i, j] += dt * densidad * ti.exp(-6 * d2 / (s_radius * s_radius))
+
+
+@ti.kernel
+def density_source_rgb(dens: ti.template(), input_data: ti.types.ndarray()):
+    for i, j in dens:
+        if input_data[2] == 0:
+            continue
+        densidad = input_data[2] * s_dens
+        mx, my = input_data[0], input_data[1]
+        cx = i + 0.5
+        cy = j + 0.5
+        d2 = (cx - mx) ** 2 + (cy - my) ** 2
+        dens[i, j] += dt * densidad * ti.exp(-6 * d2 / (s_radius * s_radius)) * ti.Vector(density_color)
 
 
 @ti.kernel
