@@ -1,8 +1,8 @@
 import taichi as ti
 import numpy as np
 from shared.parameters import res, dt, s_dens, s_radius
-from shared.utils import density_source
-from difusion import diffuse, set_boundaries
+from shared.utils import density_source, set_boundaries
+from difusion import diffuse
 
 arch = ti.vulkan if ti._lib.core.with_vulkan() else ti.cuda
 ti.init(arch=arch)

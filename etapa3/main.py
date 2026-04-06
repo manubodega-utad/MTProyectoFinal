@@ -1,8 +1,8 @@
 import taichi as ti
 import numpy as np
 from shared.parameters import res, s_force
-from shared.utils import density_source, velocity_source, add_forces
-from etapa1.difusion import diffuse, set_boundaries
+from shared.utils import density_source, set_boundaries, add_forces
+from etapa1.difusion import diffuse
 from etapa2.advection import advect
 
 arch = ti.vulkan if ti._lib.core.with_vulkan() else ti.cuda
