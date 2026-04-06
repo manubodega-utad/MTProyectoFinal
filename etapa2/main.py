@@ -1,17 +1,19 @@
 import taichi as ti
 import numpy as np
-from shared.parameters import res, dt, s_dens, s_radius
-from shared.utils import density_source, velocity_source, swap
-from etapa1.difusion import diffuse
+from shared.parameters import res, velocity_scale
+from shared.utils import density_source, velocity_source
+from etapa1.difusion import diffuse, set_boundaries
 from advection import advect
 
 arch = ti.vulkan if ti._lib.core.with_vulkan() else ti.cuda
 ti.init(arch=arch)
 
 # Campos
+
+density_0 = ti.field(dtype=ti.f32, shape=(res, res))  # Densidad de la fuente
+density_1 = ti.field(dtype=ti.f32, shape=(res, res))  # Densidad iteración anterior
+density_2 = ti.field(dtype=ti.f32, shape=(res, res))  # Densidad nueva
 velocity = ti.Vector.field(2, dtype=ti.f32, shape=(res, res))
-density_1 = ti.field(dtype=ti.f32, shape=(res, res))
-density_2 = ti.field(dtype=ti.f32, shape=(res, res))
 
 
 class FieldPair:
@@ -26,26 +28,38 @@ class FieldPair:
 dens = FieldPair(density_1, density_2)
 
 
+@ti.kernel
+def init_vel(vel: ti.template()):
+    franja_inferior = res // 3
+    franja_superior = 2 * res // 3
+    for i, j in vel:
+        if j < franja_inferior:
+            # Franja de abajo: derecha → izquierda
+            vel[i, j][0] = -velocity_scale
+        elif j < franja_superior:
+            # Franja central: izquierda → derecha
+            vel[i, j][0] = velocity_scale
+        else:
+            # Franja de arriba: derecha → izquierda
+            vel[i, j][0] = -velocity_scale
+
+
 def init():
+    density_0.fill(0)
     dens.cur.fill(0)
     dens.nxt.fill(0)
-    velocity.fill(0)
+    init_vel(velocity)
 
 
 def step(input_data):
     density_source(dens.cur, input_data)
     velocity_source(velocity, input_data)
-    debug_velocity()
-    diffuse(dens)
-    dens.swap()
+    set_boundaries(dens.cur)
+    diffuse(dens, density_0)
     advect(dens.nxt, dens.cur, velocity)
+    set_boundaries(dens.nxt)
     dens.swap()
 
-@ti.kernel
-def debug_velocity():
-    for i, j in velocity:
-        if velocity[i, j].norm() > 0.1:
-            print(f"vel[{i},{j}] = ", velocity[i, j])
 
 def main():
     paused = False
@@ -55,7 +69,7 @@ def main():
     init()
 
     while window.running:
-        input_data = np.zeros(5, dtype=np.float32)
+        input_data = np.zeros(3, dtype=np.float32)
 
         if window.get_event(ti.ui.PRESS):
             e = window.event
@@ -72,8 +86,6 @@ def main():
             input_data[0] = mouse[0] * res
             input_data[1] = mouse[1] * res
             input_data[2] = 1.0
-            input_data[3] = 0.005    # velocidad x
-            input_data[4] = 0.0    # velocidad y
 
         if not paused:
             step(input_data)
