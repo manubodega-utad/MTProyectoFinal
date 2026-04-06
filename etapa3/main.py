@@ -1,16 +1,18 @@
 import taichi as ti
 import numpy as np
-from shared.parameters import res
-from shared.utils import density_source, swap, add_forces
-from etapa1.difusion import diffuse
+from shared.parameters import res, s_force
+from shared.utils import density_source, velocity_source, add_forces
+from etapa1.difusion import diffuse, set_boundaries
 from etapa2.advection import advect
 
 arch = ti.vulkan if ti._lib.core.with_vulkan() else ti.cuda
 ti.init(arch=arch)
 
+# Campos
+density_0 = ti.field(dtype=ti.f32, shape=(res, res))  # Densidad de la fuente
+density_1 = ti.field(dtype=ti.f32, shape=(res, res))  # Densidad iteración anterior
+density_2 = ti.field(dtype=ti.f32, shape=(res, res))  # Densidad nueva
 velocity = ti.Vector.field(2, dtype=ti.f32, shape=(res, res))
-density_1 = ti.field(dtype=ti.f32, shape=(res, res))
-density_2 = ti.field(dtype=ti.f32, shape=(res, res))
 
 
 class FieldPair:
@@ -24,31 +26,38 @@ class FieldPair:
 
 dens = FieldPair(density_1, density_2)
 
+
 def init():
+    density_0.fill(0)
     dens.cur.fill(0)
     dens.nxt.fill(0)
     velocity.fill(0)
 
-def step(input_data, force):
+
+def step(input_data):
+    # 1. Fuente de densidad y fuerza
     density_source(dens.cur, input_data)
-    add_forces(velocity, force[0], force[1])
-    diffuse(dens)
-    dens.swap()
+    add_forces(velocity, input_data)
+    set_boundaries(dens.cur)
+
+    # 2. Difusión de densidad
+    diffuse(dens, density_0)
+
+    # 3. Advección de densidad
     advect(dens.nxt, dens.cur, velocity)
+    set_boundaries(dens.nxt)
     dens.swap()
+
 
 def main():
     paused = False
-    window = ti.ui.Window("Etapa 3: Campo de velocidades", (res, res))
+    window = ti.ui.Window("Etapa 3: Fuerzas", (res, res))
     canvas = window.get_canvas()
     init()
 
-    force = np.array([0.0, 0.0], dtype=np.float32)
-    vel = 0.2
-
+    prev_mouse = None
     while window.running:
         input_data = np.zeros(5, dtype=np.float32)
-        force[:] = 0.0
 
         if window.get_event(ti.ui.PRESS):
             e = window.event
@@ -59,28 +68,38 @@ def main():
                 init()
             elif e.key == "p":
                 paused = not paused
-            elif e.key == ti.ui.UP:
-                force[1] = vel
-            elif e.key == ti.ui.DOWN:
-                force[1] = -vel
-            elif e.key == ti.ui.LEFT:
-                force[0] = -vel
-            elif e.key == ti.ui.RIGHT:
-                force[0] = vel
 
+        mouse = window.get_cursor_pos()
+        mx = mouse[0] * res
+        my = mouse[1] * res
+
+        # 1. BOTÓN DERECHO (RMB)
         if window.is_pressed(ti.ui.RMB):
-            mouse = window.get_cursor_pos()
-            input_data[0] = mouse[0] * res
-            input_data[1] = mouse[1] * res
+            input_data[0] = mx
+            input_data[1] = my
             input_data[2] = 1.0
-            input_data[3] = 0.0
-            input_data[4] = 0.0
+        else:
+            input_data[2] = 0.0
+
+        # 2. BOTÓN IZQUIERDO (LMB)
+        if window.is_pressed(ti.ui.LMB):
+            input_data[0] = mx
+            input_data[1] = my
+            if prev_mouse is not None:
+                dx = mx - prev_mouse[0]
+                dy = my - prev_mouse[1]
+                input_data[3] = dx * s_force
+                input_data[4] = dy * s_force
+            prev_mouse = (mx, my)
+        else:
+            prev_mouse = None
 
         if not paused:
-            step(input_data, force)
+            step(input_data)
 
         canvas.set_image(dens.cur)
         window.show()
+
 
 if __name__ == "__main__":
     main()

@@ -9,7 +9,6 @@ arch = ti.vulkan if ti._lib.core.with_vulkan() else ti.cuda
 ti.init(arch=arch)
 
 # Campos
-
 density_0 = ti.field(dtype=ti.f32, shape=(res, res))  # Densidad de la fuente
 density_1 = ti.field(dtype=ti.f32, shape=(res, res))  # Densidad iteración anterior
 density_2 = ti.field(dtype=ti.f32, shape=(res, res))  # Densidad nueva
@@ -52,10 +51,15 @@ def init():
 
 
 def step(input_data):
+    # 1. Fuente de densidad y Velocidad
     density_source(dens.cur, input_data)
     velocity_source(velocity, input_data)
     set_boundaries(dens.cur)
+
+    # 2. Difusión de densidad
     diffuse(dens, density_0)
+
+    # 3. Advección de densidad
     advect(dens.nxt, dens.cur, velocity)
     set_boundaries(dens.nxt)
     dens.swap()
@@ -81,10 +85,13 @@ def main():
             elif e.key == "p":
                 paused = not paused
 
+        mouse = window.get_cursor_pos()
+        mx = mouse[0] * res
+        my = mouse[1] * res
+
         if window.is_pressed(ti.ui.RMB):
-            mouse = window.get_cursor_pos()
-            input_data[0] = mouse[0] * res
-            input_data[1] = mouse[1] * res
+            input_data[0] = mx
+            input_data[1] = my
             input_data[2] = 1.0
 
         if not paused:

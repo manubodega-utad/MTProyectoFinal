@@ -8,6 +8,7 @@ velocity_scale = 10.0
 
 s_dens = 10.0
 s_radius = res / 15.0
+s_force = 200.0
 
 # Color densidad
 density_color = color_magenta

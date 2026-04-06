@@ -31,8 +31,11 @@ def init():
 
 
 def step(input_data):
+    # 1. Fuente de densidad
     density_source(dens.cur, input_data)
     set_boundaries(dens.cur)
+
+    # 2. Difusión de densidad
     diffuse(dens, density_0)
 
 
@@ -56,10 +59,13 @@ def main():
             elif e.key == "p":
                 paused = not paused
 
+        mouse = window.get_cursor_pos()
+        mx = mouse[0] * res
+        my = mouse[1] * res
+
         if window.is_pressed(ti.ui.RMB):
-            mouse = window.get_cursor_pos()
-            input_data[0] = mouse[0] * res
-            input_data[1] = mouse[1] * res
+            input_data[0] = mx
+            input_data[1] = my
             input_data[2] = 1.0
 
         if not paused:
